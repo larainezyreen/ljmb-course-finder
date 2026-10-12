@@ -1,119 +1,132 @@
-# Week 14A · Next.js RAG starter
+# LJMB Course Finder
 
-A streaming chat app on top of your knowledge base, built with [Next.js 15](https://nextjs.org/), the [Vercel AI SDK](https://sdk.vercel.ai/), and [Upstash Vector](https://upstash.com/docs/vector). This is the working solution for Section 4 of Week 14A.
+A document-grounded chat app that helps managers and L&D professionals find relevant LJMB courses.
 
-## What's here
+Created for Week 14 Mini-Project 14.3: Ship Your Own RAG, adapting the course-provided Next.js starter.
 
-```
-14A-nextjs-rag/
-├── app/
-│   ├── globals.css
-│   ├── layout.tsx
-│   ├── page.tsx                          # FINAL UI — useChat + sources
-│   └── api/chat/route.ts                 # FINAL handler — RAG-as-tool-call
-├── lib/
-│   └── seed.ts                           # Embeds data/sample.pdf into Upstash
-├── data/
-│   └── sample.pdf                        # Synthetic Acme Widget Spec
-├── steps/                                # Reference snapshots per workshop step
-│   ├── step2-plain-chat/
-│   │   ├── page.tsx                      # Step 2: useChat client component
-│   │   └── route.ts                      # Step 2: vanilla streamText handler
-│   ├── step4-rag-as-tool/
-│   │   └── route.ts                      # Step 4: route handler with the tool
-│   └── step5-sources/
-│       └── page.tsx                      # Step 5: page with <details> sources
-├── package.json
-├── tsconfig.json
-├── next.config.mjs
-├── postcss.config.mjs
-├── tailwind.config.ts
-├── .env.example
-├── .gitignore
-└── README.md
-```
+## Live app
 
+https://ljmb-course-finder.vercel.app
 
+## Features
 
-## Setup (5 minutes)
+- Streaming responses using the Vercel AI SDK.
+- Retrieval through the getInformation tool.
+- Semantic search with OpenAI embeddings and Upstash Vector.
+- Expandable sources with filenames, page numbers, similarity scores, and passage text.
+- Two-PDF ingestion with source metadata.
+- Instructions to acknowledge missing information rather than invent details.
 
-```bash
-# 1. install
-npm install
+Similarity scores measure retrieval similarity, not answer confidence.
 
-# 2. environment
-cp .env.example .env.local
-# edit .env.local and paste your real OPENAI_API_KEY,
-# UPSTASH_VECTOR_REST_URL, UPSTASH_VECTOR_REST_TOKEN
+## Technology
 
-# 3. seed the vector index (one-time, or whenever data/sample.pdf changes)
-npm run seed
-```
+Next.js, TypeScript, Vercel AI SDK, OpenAI GPT-4.1 mini, text-embedding-3-small, Upstash Vector, and Vercel hosting.
 
-The seed script reads `data/sample.pdf`, chunks it, embeds each chunk with `text-embedding-3-small`, and upserts to your Upstash Vector index. Re-running it overwrites the same ids, so it's idempotent.
+## Corpus
 
-## Run the final app
+1. LJMB - 22-Course Curriculum - Leadership & Management Development Program v2017.pdf: 25 pages.
+2. LJMB Company Profile Catalogue 2026 VERSION .pdf: 12 pages.
 
-```bash
-npm run dev
-# open http://localhost:3000
-```
+The documents cover courses, learning objectives, frameworks, and company information. The 2017 curriculum is historical material and does not confirm current availability.
 
-Try asking:
+The PDFs are not included in this repository. Obtain authorized copies from the project owner to reproduce the index.
 
-- *"What auth methods does the API support?"*
-- *"What happens when I exceed the rate limit?"*
-- *"Compare OAuth2 and API key authentication."*
+## Local setup
 
-You should see tokens stream into the assistant bubble, then a **Sources (N)** disclosure beneath it. Expanding it shows page numbers, similarity scores, and the chunk text the model retrieved.
+### Install dependencies
 
-## Walk through the steps
+    npm ci
 
-The `/steps` folder contains reference snapshots. To try them, copy each file over the matching path in `app/`:
+### Configure credentials
 
+    cp .env.example .env.local
 
-| Step | Files to copy                                                | What it shows                              |
-| ---- | ------------------------------------------------------------ | ------------------------------------------ |
-| 2    | `steps/step2-plain-chat/page.tsx` → `app/page.tsx`           | useChat working against vanilla streamText |
-|      | `steps/step2-plain-chat/route.ts` → `app/api/chat/route.ts`  | (no RAG yet — verify streaming first)      |
-| 4    | `steps/step4-rag-as-tool/route.ts` → `app/api/chat/route.ts` | The model decides when to call retrieval   |
-| 5    | `steps/step5-sources/page.tsx` → `app/page.tsx`              | Sources rendered below answers             |
+Fill in these three variables in .env.local:
 
+    OPENAI_API_KEY=
+    UPSTASH_VECTOR_REST_URL=
+    UPSTASH_VECTOR_REST_TOKEN=
 
-After Step 5, the snapshots and the final `app/page.tsx` + `app/api/chat/route.ts` are the same shape — the final versions add a small system prompt and some chrome (a header, slightly nicer styling, status / error rendering).
+Use an OpenAI project with access to the required models and an Upstash Vector index whose dimensions match the embedding model.
 
-## Use your own corpus
+Keep credentials server-side. Do not use NEXT_PUBLIC_ prefixes or commit real credentials.
 
-1. Replace `data/sample.pdf` with your own PDF.
-2. Re-run `npm run seed`.
-3. Restart `npm run dev`.
+### Add the documents
 
-For multi-PDF, multi-version, or permission-aware retrieval see Week 14B Section 4.
+    mkdir -p data
 
-## Deploy to Vercel
+Place both original PDFs in data/. The seed script requires exactly two filenames beginning with LJMB and ending with .pdf.
 
-```bash
-npm i -g vercel  # if you don't have it
-vercel           # first run: log in, link the project
-vercel link
-vercel env add OPENAI_API_KEY
-vercel env add UPSTASH_VECTOR_REST_URL
-vercel env add UPSTASH_VECTOR_REST_TOKEN
-vercel --prod
-```
+### Index the corpus
 
-You'll get a public URL like `https://rag-ui-xxx.vercel.app`. The seed is local — you only need to seed once per index, regardless of where the chat app is hosted.
+    npm run seed
 
-## Common errors
+Text is extracted page by page and split into chunks of up to 1,800 characters with 250-character overlap, preferring line boundaries where possible.
 
+Passages are embedded and stored with text, filename, page, and version metadata. The original corpus produced 61 passages.
 
-| Symptom                                            | Fix                                                                |
-| -------------------------------------------------- | ------------------------------------------------------------------ |
-| `Error: missing UPSTASH_VECTOR_REST_URL`           | Run `npm run seed` after setting `.env.local`. Verify in Upstash.  |
-| Page renders but submitting hangs                  | Route handler missing `toDataStreamResponse()`. Check `route.ts`.  |
-| Empty / very short answer after a tool call        | `maxSteps` not set or set to 1. Set `maxSteps: 3` on `streamText`. |
-| `Cannot use useChat in a Server Component`         | Forgot `'use client'` at the top of `page.tsx`.                    |
-| Build error: `Type '...' is not assignable to ...` | Run `npx tsc --noEmit` to see the full type error.                 |
-| `vercel --prod` build fails on missing env vars    | `vercel env add ...` and pick **Production** when prompted.        |
+Identical passages use identical hash-based IDs. Changed or removed passages are not automatically deleted. Use a fresh dedicated index when rebuilding a changed corpus.
 
+### Run locally
 
+    npm run dev
+
+Open http://localhost:3000.
+
+### Check the production build
+
+    npm run build
+
+## Retrieval design
+
+The model can call getInformation when document information is needed. The tool embeds the query and retrieves the top four passages from Upstash.
+
+The model uses the retrieved passages to answer, and the interface displays the retrieved sources beneath the response.
+
+Documents are retrieved through a tool call rather than automatically attached to every message.
+
+## Example questions
+
+- Which course helps managers delegate effectively?
+- Which course teaches PESOS coaching?
+- Which course uses GROW coaching?
+- What course would help a first-time manager?
+- Do the supplied documents include Python programming courses?
+- Do the documents specify course prices?
+
+## Deployment
+
+Import the repository into Vercel.
+
+Configure OPENAI_API_KEY, UPSTASH_VECTOR_REST_URL, and UPSTASH_VECTOR_REST_TOKEN for Production, without surrounding quotation marks. Then deploy or redeploy.
+
+Run the seed script before testing. Production queries the configured Upstash index; deployment does not automatically index the PDFs.
+
+## Validation
+
+Manual examples retrieved relevant delegation, PESOS, and GROW course information. Missing-information questions were also exercised.
+
+The GitHub repository was verified as accessible in an incognito browser window.
+
+This is a small manual sample, not a comprehensive accuracy evaluation.
+
+## Limitations
+
+- Search can return overlapping or less relevant passages.
+- PDF text extraction can preserve awkward spacing.
+- Image-only PDFs require OCR, which is not implemented.
+- Retrieved sources do not guarantee every generated statement is correct.
+- Historical and newer documents are mixed.
+- Current pricing and availability require confirmation with LJMB.
+- Application-level authentication and rate limiting are not implemented.
+
+## Main files
+
+- app/page.tsx: chat interface and sources.
+- app/api/chat/route.ts: streaming responses and retrieval tool.
+- lib/seed.ts: extraction, chunking, embedding, and indexing.
+
+## Author
+
+Laraine Zyreen R. Marcelo
