@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 
-type Source = { text?: string; page?: number; score?: number; filename?: string };
+type Source = { text?: string; page?: number; score?: number; filename?: string; version?: string };
 
 export default function Page() {
   const { messages, input, setInput, handleInputChange, handleSubmit, status, error } = useChat({
@@ -81,6 +81,15 @@ export default function Page() {
                       <summary className="cursor-pointer">
                         Sources ({(inv.result as Source[]).length})
                       </summary>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Retrieved passages for checking the answer.
+                        Similarity scores do not measure answer confidence.
+                      </p>
+                      {(inv.result as Source[]).length === 0 && (
+                        <p className="mt-2">
+                          No readable passages were returned for this search.
+                        </p>
+                      )}
                       <ul className="mt-2 space-y-2">
                         {(inv.result as Source[]).map((src, i) => (
                           <li
@@ -93,6 +102,13 @@ export default function Page() {
                                 ? src.score.toFixed(2)
                                 : '—'}
                             </span>
+                            {(src.version === '2017' ||
+                              src.filename?.includes('2017')) && (
+                              <p className="my-1 font-medium text-amber-800">
+                                Historical 2017 curriculum. Confirm current
+                                course details and availability with LJMB.
+                              </p>
+                            )}
                             <p>{src.text}</p>
                           </li>
                         ))}
