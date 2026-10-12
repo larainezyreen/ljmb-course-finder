@@ -70,7 +70,20 @@ export default function Page() {
             </span>
 
             {m.role === 'assistant' &&
-              m.toolInvocations?.map(
+              [
+                ...(m.toolInvocations ?? []),
+                ...((m.annotations ?? []) as Array<{
+                  type?: string; sources?: Source[];
+                }>)
+                  .filter(annotation =>
+                    annotation.type === 'retrieved-sources')
+                  .map((annotation, i) => ({
+                    state: 'result' as const,
+                    toolName: 'getInformation',
+                    toolCallId: `${m.id}-retrieval-${i}`,
+                    result: annotation.sources ?? [],
+                  })),
+              ].map(
                 (inv) =>
                   inv.state === 'result' &&
                   inv.toolName === 'getInformation' && (

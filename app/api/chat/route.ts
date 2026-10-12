@@ -7,7 +7,10 @@
  * client renders those as collapsible sources under the assistant message.
  */
 import { openai } from '@ai-sdk/openai';
-import { streamText, tool, embed } from 'ai';
+import {
+  streamText, generateText, tool, embed,
+  convertToCoreMessages, createDataStreamResponse,
+} from 'ai';
 import { Index } from '@upstash/vector';
 import { z } from 'zod';
 
@@ -16,7 +19,7 @@ const index = new Index();
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
-  const result = streamText({
+  const options = {
     model: openai('gpt-4.1-mini'),
     system:
       'You are the LJMB Course Finder. Recommend courses using the provided LJMB curriculum and company catalogue. ' +
@@ -86,7 +89,60 @@ export async function POST(req: Request) {
         message.replace(/sk-[A-Za-z0-9_-]+/g, '[REDACTED]')
       );
     },
-  });
+  } satisfies Parameters<typeof streamText>[0];
 
-  return result.toDataStreamResponse();
+  const latest = messages[messages.length - 1];
+  const question = typeof latest?.content === 'string'
+    ? latest.content : '';
+
+  const hasEarlierRetrieval = messages.some(
+    (message: { toolInvocations?: Array<{ toolName?: string; state?: string }> }) =>
+      message.toolInvocations?.some(
+        invocation => invocation.toolName === 'getInformation' &&
+          invocation.state === 'result'
+      )
+  );
+
+  // Require evidence for recognized factual follow-ups.
+  // Other requests retain the model's normal tool selection.
+  const factualFollowUp = hasEarlierRetrieval &&
+    /\b(that|this|it|its|those|these)\b/i.test(question) &&
+    /\b(how long|duration|how much|cost|price|when|available|availability|objectives|covers?|content)\b/i.test(question);
+
+  if (factualFollowUp) {
+    return createDataStreamResponse({
+      execute: async writer => {
+        const retrieval = await generateText({
+          ...options,
+          messages: convertToCoreMessages(messages),
+          toolChoice: { type: 'tool', toolName: 'getInformation' },
+          maxSteps: 1,
+        });
+
+        const sources = retrieval.toolResults.flatMap(
+          result => Array.isArray(result.result) ? result.result : []
+        );
+
+        writer.writeMessageAnnotation({
+          type: 'retrieved-sources',
+          sources,
+        });
+
+        const answer = streamText({
+          ...options,
+          messages: [
+            ...convertToCoreMessages(messages),
+            ...retrieval.response.messages,
+          ],
+          toolChoice: 'none',
+          maxSteps: 1,
+        });
+
+        answer.mergeIntoDataStream(writer);
+      },
+      onError: () => 'Unable to retrieve course information. Please try again.',
+    });
+  }
+
+  return streamText(options).toDataStreamResponse();
 }
