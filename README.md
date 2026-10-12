@@ -80,7 +80,7 @@ Open http://localhost:3000.
 
 ## Retrieval design
 
-The model can call getInformation when document information is needed. The tool embeds the query and retrieves the top four passages from Upstash.
+The model can call getInformation when document information is needed. The tool embeds the query and retrieves eight candidate passages from Upstash. It removes empty passages, exact duplicates, and shorter passages fully contained in another passage from the same document page, then returns up to four sources. Partial overlaps and less relevant passages can still remain.
 
 The model uses the retrieved passages to answer, and the interface displays the retrieved sources beneath the response.
 
@@ -130,3 +130,31 @@ This is a small manual sample, not a comprehensive accuracy evaluation.
 ## Author
 
 Laraine Zyreen R. Marcelo
+
+
+## Historical sources and factual follow-ups
+
+Sources from the 2017 curriculum display a historical-material label.
+Users should confirm current course details, pricing, and availability with LJMB.
+
+Recognized factual follow-ups, such as "How long is that course?" and
+"How much does it cost?", require a getInformation tool call when earlier
+retrieval exists in the conversation. The model uses conversation context
+to formulate the search. The answer then streams, and the actual retrieved
+passages appear beneath it.
+
+This routing uses a limited set of follow-up keywords and references.
+It does not cover every possible follow-up phrasing.
+Other requests retain the model's normal tool selection.
+
+Production retests demonstrated separate sources beneath the GROW duration
+and pricing follow-ups. The duration matched the historical curriculum;
+the pricing answer acknowledged missing information.
+
+## Chunking trade-off
+
+Page-based extraction preserves precise page attribution. The 1,800-character
+chunks and 250-character overlap retain some context across chunk boundaries.
+However, course descriptions may span chunks, and overlap can produce
+repeated content. A future improvement is to chunk by course sections
+while preserving page metadata.
