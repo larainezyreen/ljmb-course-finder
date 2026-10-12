@@ -1,0 +1,68 @@
+/**
+ * Final Route Handler — Step 4 of Section 4 (RAG-as-tool-call) +
+ * the source metadata used by Step 5's UI.
+ *
+ * The model decides whether to call the getInformation tool. When it does,
+ * the tool runs vector search and returns chunk text + page + score. The
+ * client renders those as collapsible sources under the assistant message.
+ */
+import { openai } from '@ai-sdk/openai';
+import { streamText, tool, embed } from 'ai';
+import { Index } from '@upstash/vector';
+import { z } from 'zod';
+
+const index = new Index();
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+
+  const result = streamText({
+    model: openai('gpt-4.1-mini'),
+    system:
+      'You are the LJMB Course Finder. Recommend courses using the provided LJMB curriculum and company catalogue. ' +
+      'Use the getInformation tool whenever the user asks a question whose ' +
+      'answer might be in the LJMB documents. If the documents do not cover something, ' +
+      'say so directly rather than guessing. Do not imply that LJMB offers undocumented courses or services. Format answers with short paragraphs and separate bullet points.',
+    messages,
+    tools: {
+      getInformation: tool({
+        description:
+          'Search the LJMB documents for courses, learning objectives, leadership skills, and company information. Use this before recommending courses.',
+        parameters: z.object({
+          query: z
+            .string()
+            .describe('the topic, term, or sub-question to search for'),
+        }),
+        execute: async ({ query }) => {
+          const { embedding } = await embed({
+            model: openai.embedding('text-embedding-3-small'),
+            value: query,
+          });
+          const hits = await index.query({
+            vector: embedding,
+            topK: 4,
+            includeMetadata: true,
+          });
+          return hits.map((h) => ({
+            text: (h.metadata?.text as string) ?? '',
+            page: (h.metadata?.page as number) ?? null,
+            filename: (h.metadata?.filename as string) ?? 'LJMB document',
+            score: h.score,
+          }));
+        },
+      }),
+    },
+    maxSteps: 3,
+    onError: ({ error }) => {
+      const message = error instanceof Error
+        ? error.message
+        : 'Unknown streaming error';
+      console.error(
+        'CHAT ERROR:',
+        message.replace(/sk-[A-Za-z0-9_-]+/g, '[REDACTED]')
+      );
+    },
+  });
+
+  return result.toDataStreamResponse();
+}
